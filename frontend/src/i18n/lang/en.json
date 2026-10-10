@@ -553,6 +553,7 @@
       "sort": "Sort",
       "dueGroups": {
         "overdue": "Overdue",
+        "earlier": "Earlier",
         "later": "Later",
         "noDueDate": "No due date"
       }

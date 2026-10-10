@@ -228,6 +228,7 @@ const shownTasks = computed(() => isDayGrouping.value
 
 const DUE_DAY_GROUP_TITLES: Record<Exclude<DueDayGroupKind, 'day'>, string> = {
 	overdue: 'project.list.dueGroups.overdue',
+	earlier: 'project.list.dueGroups.earlier',
 	today: 'input.datepicker.today',
 	tomorrow: 'input.datepicker.tomorrow',
 	later: 'project.list.dueGroups.later',

@@ -462,6 +462,7 @@
 			"sort": "Сортировка",
 			"dueGroups": {
 				"overdue": "Просрочено",
+				"earlier": "Ранее",
 				"later": "Позже",
 				"noDueDate": "Без срока"
 			}

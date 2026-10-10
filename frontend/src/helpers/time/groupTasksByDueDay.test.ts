@@ -2,13 +2,13 @@ import {describe, it, expect} from 'vitest'
 
 import {formatDueDayTitle, groupTasksByDueDay, resolveTimeZone} from './groupTasksByDueDay'
 
-type TestTask = {id: number, due_date?: string | null}
+type TestTask = {id: number, due_date?: string | null, done?: boolean}
 
 // Saturday, 10 October 2026
 const NOW = new Date('2026-10-10T12:00:00Z')
 
-function task(id: number, due_date?: string | null): TestTask {
-	return {id, due_date}
+function task(id: number, due_date?: string | null, done = false): TestTask {
+	return {id, due_date, done}
 }
 
 function summary(tasks: TestTask[], now = NOW, timeZone: string | null | undefined = 'UTC') {
@@ -96,6 +96,27 @@ describe('groupTasksByDueDay', () => {
 				task(2, '2025-01-01T10:00:00Z'),
 				task(3, '2026-10-03T10:00:00Z'),
 			])).toEqual([{key: 'overdue', ids: [2, 3, 1]}])
+		})
+	})
+
+	describe('done tasks', () => {
+		it('puts done tasks due before today into earlier instead of overdue', () => {
+			expect(summary([
+				task(1, '2026-10-09T08:00:00Z', true),
+				task(2, '2026-10-09T09:00:00Z'),
+				task(3, '2026-10-09T10:00:00Z', true),
+				task(4, '2026-10-08T10:00:00Z'),
+			])).toEqual([
+				{key: 'overdue', ids: [4, 2]},
+				{key: 'earlier', ids: [1, 3]},
+			])
+		})
+
+		it('keeps done tasks due today or later in their day', () => {
+			expect(summary([task(1, '2026-10-10T08:00:00Z', true), task(2, '2026-10-13T08:00:00Z', true)])).toEqual([
+				{key: 'today', ids: [1]},
+				{key: 'day-3', ids: [2]},
+			])
 		})
 	})
 

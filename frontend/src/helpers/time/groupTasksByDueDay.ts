@@ -1,7 +1,7 @@
 import {parseDateOrNull} from '@/helpers/parseDateOrNull'
 import {MILLISECONDS_A_DAY} from '@/constants/date'
 
-export type DueDayGroupKind = 'overdue' | 'today' | 'tomorrow' | 'day' | 'later' | 'noDueDate'
+export type DueDayGroupKind = 'overdue' | 'earlier' | 'today' | 'tomorrow' | 'day' | 'later' | 'noDueDate'
 
 export interface DueDayGroup<T> {
 	key: string
@@ -45,9 +45,6 @@ function createDayNumber(timeZone: string | undefined) {
 }
 
 function classify(daysFromToday: number): Pick<DueDayGroup<unknown>, 'key' | 'kind'> {
-	if (daysFromToday < 0) {
-		return {key: 'overdue', kind: 'overdue'}
-	}
 	if (daysFromToday === 0) {
 		return {key: 'today', kind: 'today'}
 	}
@@ -61,12 +58,12 @@ function classify(daysFromToday: number): Pick<DueDayGroup<unknown>, 'key' | 'ki
 }
 
 /**
- * Splits tasks into overdue, today, tomorrow, one group per day up to DUE_DAY_GROUP_LAST_DAY days
- * from today, later and no due date. Days are calendar days in `timeZone`.
- * Groups come back in that order, empty ones are left out. Tasks within a group are sorted by
- * due date, earliest first; tasks with equal due dates and those without one keep their order.
+ * Splits tasks into overdue, earlier (done tasks due before today), today, tomorrow, one group per
+ * day up to DUE_DAY_GROUP_LAST_DAY days from today, later and no due date. Days are calendar days
+ * in `timeZone`. Groups come back in that order, empty ones are left out. Tasks within a group are
+ * sorted by due date, earliest first; tasks with equal due dates and those without one keep their order.
  */
-export function groupTasksByDueDay<T extends {due_date?: string | null}>(
+export function groupTasksByDueDay<T extends {due_date?: string | null, done?: boolean | null}>(
 	tasks: readonly T[],
 	now: Date,
 	timeZone?: string | null,
@@ -85,25 +82,41 @@ export function groupTasksByDueDay<T extends {due_date?: string | null}>(
 		}
 	}
 
-	// The calendar day only ever grows with the due date, so after sorting every group is one run.
 	dated.sort((a, b) => a.due.getTime() - b.due.getTime())
 
-	const groups: DueDayGroup<T>[] = []
+	const overdue: T[] = []
+	const earlier: T[] = []
+	// From today on the calendar day only grows with the due date, so every group is one run.
+	const upcoming: DueDayGroup<T>[] = []
 	for (const {task, due} of dated) {
-		const {key, kind} = classify(dayNumber(due) - today)
-		let group = groups.at(-1)
+		const daysFromToday = dayNumber(due) - today
+		if (daysFromToday < 0) {
+			// A done task is not overdue
+			if (task.done) {
+				earlier.push(task)
+			} else {
+				overdue.push(task)
+			}
+			continue
+		}
+
+		const {key, kind} = classify(daysFromToday)
+		let group = upcoming.at(-1)
 		if (group?.key !== key) {
 			group = {key, kind, day: kind === 'day' ? due : null, tasks: []}
-			groups.push(group)
+			upcoming.push(group)
 		}
 		group.tasks.push(task)
 	}
 
-	if (undated.length > 0) {
-		groups.push({key: 'noDueDate', kind: 'noDueDate', day: null, tasks: undated})
-	}
+	const groups: DueDayGroup<T>[] = [
+		{key: 'overdue', kind: 'overdue', day: null, tasks: overdue},
+		{key: 'earlier', kind: 'earlier', day: null, tasks: earlier},
+		...upcoming,
+		{key: 'noDueDate', kind: 'noDueDate', day: null, tasks: undated},
+	]
 
-	return groups
+	return groups.filter(group => group.tasks.length > 0)
 }
 
 /**
