@@ -47,8 +47,33 @@
 						</ButtonLink>
 					</Nothing>
 
+					<template v-if="isDayGrouping">
+						<section
+							v-for="group in dayGroups"
+							:key="group.key"
+							class="due-day-group"
+							:class="`due-day-group--${group.kind}`"
+						>
+							<h3 class="due-day-group__title">
+								{{ dayGroupTitle(group) }}
+							</h3>
+							<ul class="tasks dragging-disabled">
+								<SingleTaskInProject
+									v-for="(task, index) in group.tasks"
+									:key="task.id"
+									:ref="(el) => setTaskRef(el as InstanceType<typeof SingleTaskInProject> | null, group.offset + index)"
+									:show-list-color="false"
+									:can-mark-as-done="canWrite || isPseudoProject"
+									:the-task="task"
+									:all-tasks="allTasks"
+									@taskUpdated="updateTasks"
+								/>
+							</ul>
+						</section>
+					</template>
+
 					<draggable
-						v-if="tasks && tasks.length > 0"
+						v-else-if="tasks && tasks.length > 0"
 						v-model="tasks"
 						:group="{name: 'tasks', put: false}"
 						:disabled="!canDragTasks || !isPositionSorting"
@@ -69,12 +94,12 @@
 						@start="handleDragStart"
 						@end="saveTaskPosition"
 					>
-						<template #item="{element: t, index}">
+						<template #item="{element: task, index}">
 							<SingleTaskInProject
 								:ref="(el) => setTaskRef(el as InstanceType<typeof SingleTaskInProject> | null, index)"
 								:show-list-color="false"
 								:can-mark-as-done="canWrite || isPseudoProject"
-								:the-task="t"
+								:the-task="task"
 								:all-tasks="allTasks"
 								@taskUpdated="updateTasks"
 							>
@@ -102,6 +127,7 @@
 <script setup lang="ts">
 import {useUpdateTaskPositionMutation} from '@/client/queries/taskMutations'
 import {ref, computed, nextTick, onMounted, onBeforeUnmount, watch, toRef} from 'vue'
+import {useI18n} from 'vue-i18n'
 import {draggableFor} from '@/components/base/Draggable'
 
 import ProjectWrapper from '@/components/project/ProjectWrapper.vue'
@@ -114,14 +140,17 @@ import Pagination from '@/components/misc/Pagination.vue'
 import SortPopup from '@/components/project/partials/SortPopup.vue'
 
 import {useTaskList} from '@/composables/useTaskList'
+import {useGlobalNow} from '@/composables/useGlobalNow'
 import {useTaskDragToProject} from '@/composables/useTaskDragToProject'
 import {useCurrentProject} from '@/composables/useCurrentProject'
 import {shouldShowTaskInListView} from '@/composables/useTaskListFiltering'
 import {PERMISSIONS as Permissions} from '@/constants/permissions'
 import {calculateItemPosition} from '@/helpers/calculateItemPosition'
+import {formatDueDayTitle, groupTasksByDueDay, type DueDayGroup, type DueDayGroupKind} from '@/helpers/time/groupTasksByDueDay'
 import type {TaskResponse} from '@/client/queries/tasks'
 import {isSavedFilterProject} from '@/client/queries/projects'
 
+import {useAuthStore} from '@/stores/auth'
 import {useBaseStore} from '@/stores/base'
 import {useTaskDragState} from '@/composables/useTaskDragState'
 import {useDelayedLoading} from '@/composables/useDelayedLoading'
@@ -171,6 +200,47 @@ const tasks = computed({
 watch([projectId, () => props.viewId], () => { dragTasks.value = null })
 
 const isPositionSorting = computed(() => 'position' in sortByParam.value)
+
+const {t, locale} = useI18n({useScope: 'global'})
+const authStore = useAuthStore()
+const {now} = useGlobalNow()
+
+const isDayGrouping = computed(() => 'due_date_week' in sortByParam.value)
+
+// Each group knows where its tasks start in the order the keyboard navigation walks.
+const dayGroups = computed(() => {
+	if (!isDayGrouping.value) {
+		return []
+	}
+
+	let offset = 0
+	return groupTasksByDueDay(tasks.value, now.value, authStore.settings.timezone).map(group => {
+		const groupWithOffset = {...group, offset}
+		offset += group.tasks.length
+		return groupWithOffset
+	})
+})
+
+// The tasks in the order they are shown
+const shownTasks = computed(() => isDayGrouping.value
+	? dayGroups.value.flatMap(group => group.tasks)
+	: tasks.value)
+
+const DUE_DAY_GROUP_TITLES: Record<Exclude<DueDayGroupKind, 'day'>, string> = {
+	overdue: 'project.list.dueGroups.overdue',
+	today: 'input.datepicker.today',
+	tomorrow: 'input.datepicker.tomorrow',
+	later: 'project.list.dueGroups.later',
+	noDueDate: 'project.list.dueGroups.noDueDate',
+}
+
+function dayGroupTitle({kind, day}: DueDayGroup<TaskResponse>) {
+	if (kind === 'day') {
+		return day ? formatDueDayTitle(day, locale.value, authStore.settings.timezone) : ''
+	}
+
+	return t(DUE_DAY_GROUP_TITLES[kind])
+}
 
 const baseStore = useBaseStore()
 const {setDraggedTask} = useTaskDragState()
@@ -280,7 +350,7 @@ function setTaskRef(el: InstanceType<typeof SingleTaskInProject> | null, index: 
 }
 
 function focusTask(index: number) {
-	if (index < 0 || index >= tasks.value.length) {
+	if (index < 0 || index >= shownTasks.value.length) {
 		return
 	}
 
@@ -297,14 +367,14 @@ function handleListNavigation(e: KeyboardEvent) {
 
 	if (e.code === 'KeyJ') {
 		e.preventDefault()
-		focusTask(Math.min(focusedIndex.value + 1, tasks.value.length - 1))
+		focusTask(Math.min(focusedIndex.value + 1, shownTasks.value.length - 1))
 		return
 	}
 
 	if (e.code === 'KeyK') {
 		e.preventDefault()
 		if (focusedIndex.value === -1) {
-			focusTask(tasks.value.length - 1)
+			focusTask(shownTasks.value.length - 1)
 			return
 		}
 
@@ -360,6 +430,19 @@ onBeforeUnmount(() => {
 
 .tasks {
 	padding: .5rem;
+}
+
+.due-day-group__title {
+	margin: 0;
+	padding-block: .75rem 0;
+	padding-inline: 1rem;
+	font-size: .875rem;
+	font-weight: 700;
+	color: var(--grey-500);
+}
+
+.due-day-group--overdue .due-day-group__title {
+	color: var(--danger);
 }
 
 .task-ghost {
