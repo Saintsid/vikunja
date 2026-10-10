@@ -550,7 +550,12 @@
       "empty": "This project is currently empty.",
       "newTaskCta": "Create a task.",
       "editTask": "Edit Task",
-      "sort": "Sort"
+      "sort": "Sort",
+      "dueGroups": {
+        "overdue": "Overdue",
+        "later": "Later",
+        "noDueDate": "No due date"
+      }
     },
     "gantt": {
       "title": "Gantt",
@@ -747,6 +752,7 @@
       "priorityAsc": "Priority (Lowest first)",
       "dueDateAsc": "Due date (Earliest first)",
       "dueDateDesc": "Due date (Latest first)",
+      "dueDateByDay": "Due date — by day (week)",
       "startDateAsc": "Start date (Earliest first)",
       "startDateDesc": "Start date (Latest first)",
       "endDateAsc": "End date (Earliest first)",

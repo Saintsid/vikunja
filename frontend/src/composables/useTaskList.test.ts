@@ -147,6 +147,14 @@ describe('useTaskList sort handling for relevance ranking', () => {
 		expect(lastQuery().page).toBe(1)
 	})
 
+	it('sends the due date sort, earliest first, when grouping by due day', async () => {
+		const router = await mountTaskList({sort: 'due_date_week:asc'})
+
+		expect(lastQuery().sort_by).toEqual(['due_date'])
+		expect(lastQuery().order_by).toEqual(['asc'])
+		expect(router.currentRoute.value.query.sort).toBe('due_date_week:asc')
+	})
+
 	it('sends the default sort when not searching', async () => {
 		await mountTaskList({})
 
@@ -232,6 +240,26 @@ describe('useTaskList navigation and pagination', () => {
 		expect(router.currentRoute.value.query.sort).toBe('due_date:asc')
 		expect(taskList.sortByParam.value).toEqual({due_date: 'asc'})
 		expect(taskList.currentPage.value).toBe(page)
+	})
+
+	it('remembers grouping by due day per view like any other sort', async () => {
+		const {router, taskList} = await mountRoutedTaskList()
+		taskList.sortByParam.value = {due_date_week: 'asc'}
+		await flushPromises()
+		expect(JSON.parse(localStorage.getItem('viewFilters') ?? '{}')).toEqual({11: {sort: 'due_date_week:asc'}})
+
+		await router.push('/projects/2/21')
+		await flushPromises()
+		expect(taskList.sortByParam.value).toEqual({position: 'asc'})
+
+		sdk.projectViewTasksList.mockClear()
+		await router.push('/projects/1/11')
+		await flushPromises()
+		expect(taskList.sortByParam.value).toEqual({due_date_week: 'asc'})
+		expect(listRequests()).toEqual([{
+			path: {project: 1, view: 11},
+			query: expect.objectContaining({sort_by: ['due_date'], order_by: ['asc']}),
+		}])
 	})
 
 	it('loads a restored saved query once and never with the pre-restore params', async () => {

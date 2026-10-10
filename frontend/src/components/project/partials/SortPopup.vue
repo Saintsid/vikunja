@@ -91,6 +91,7 @@ const options = computed(() => {
 		{value: 'priority:asc', label: t('sorting.options.priorityAsc')},
 		{value: 'due_date:asc', label: t('sorting.options.dueDateAsc')},
 		{value: 'due_date:desc', label: t('sorting.options.dueDateDesc')},
+		{value: 'due_date_week:asc', label: t('sorting.options.dueDateByDay')},
 		{value: 'start_date:asc', label: t('sorting.options.startDateAsc')},
 		{value: 'start_date:desc', label: t('sorting.options.startDateDesc')},
 		{value: 'end_date:asc', label: t('sorting.options.endDateAsc')},

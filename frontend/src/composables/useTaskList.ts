@@ -31,11 +31,13 @@ export interface SortBy {
 	updated?: Order
 	done_at?: Order,
 	position?: Order,
+	// The List view shows this as tasks grouped by due day; the api sorts by due_date.
+	due_date_week?: Order,
 }
 
 const VALID_SORT_FIELDS = new Set<string>(
 	['id', 'index', 'done', 'title', 'priority', 'due_date', 'start_date',
-		'end_date', 'percent_done', 'created', 'updated', 'done_at', 'position'],
+		'end_date', 'percent_done', 'created', 'updated', 'done_at', 'position', 'due_date_week'],
 )
 
 function parseSortQuery(raw: string, fallback: SortBy): SortBy {
@@ -76,6 +78,11 @@ export function buildStoredQuery(state: TaskListQueryState): LocationQueryRaw {
 	if (state.s) query.s = state.s
 	if (state.page > 1) query.page = String(state.page)
 	return query
+}
+
+// Grouping by due day lists the earliest due date first, so it needs that sort from the api.
+function toApiSortBy({due_date_week: dueDateWeek, ...sortBy}: SortBy): SortBy {
+	return dueDateWeek ? {due_date: 'asc', ...sortBy} : sortBy
 }
 
 // The id is only a tie-breaker for the explicitly selected sort fields.
@@ -186,7 +193,7 @@ export function useTaskList(
 			return loadParams
 		}
 
-		return formatSortOrder(sortBy.value, loadParams)
+		return formatSortOrder(toApiSortBy(sortBy.value), loadParams)
 	})
 
 	watch(
