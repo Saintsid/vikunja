@@ -343,7 +343,11 @@ const focusedIndex = ref(-1)
 
 function setTaskRef(el: InstanceType<typeof SingleTaskInProject> | null, index: number) {
 	if (el === null) {
-		delete taskRefs.value[index]
+		// A removed row reports its old index after the shown rows have set theirs, e.g. when a
+		// task moves to another due day group. Only clear indexes no shown row will set again.
+		if (index >= shownTasks.value.length) {
+			delete taskRefs.value[index]
+		}
 	} else {
 		taskRefs.value[index] = el
 	}
@@ -442,7 +446,7 @@ onBeforeUnmount(() => {
 }
 
 .due-day-group--overdue .due-day-group__title {
-	color: var(--danger);
+	color: var(--danger-text);
 }
 
 .task-ghost {

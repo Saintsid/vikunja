@@ -53,7 +53,11 @@ function makeTask(id: number, position: number, dueDate?: string): ITask {
 	return {id, title: `Task ${id}`, position, due_date: dueDate} as ITask
 }
 
-async function mountList(query: Record<string, string> = {}, stubs: Record<string, Component> = {}) {
+async function mountList(
+	query: Record<string, string> = {},
+	stubs: Record<string, Component> = {},
+	queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}}),
+) {
 	const router = createRouter({history: createMemoryHistory(), routes: [{path: '/', component: {render: () => null}}]})
 	await router.push({path: '/', query})
 	const wrapper = shallowMount(ProjectList, {
@@ -66,7 +70,7 @@ async function mountList(query: Record<string, string> = {}, stubs: Record<strin
 			plugins: [
 				router,
 				createPinia(),
-				[VueQueryPlugin, {queryClient: new QueryClient({defaultOptions: {queries: {retry: false}}})}],
+				[VueQueryPlugin, {queryClient}],
 			],
 			mocks: {$t: (key: string) => key},
 			stubs: {
@@ -207,6 +211,33 @@ describe('ProjectList grouped by due day', () => {
 		}
 
 		expect(focused).toEqual([7, 6, 5, 4, 3, 2, 1, 1])
+	})
+
+	it('keeps walking every task after one moves to another group', async () => {
+		const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}})
+		sdk.projectViewTasksList.mockResolvedValue({data: {items: [
+			makeTask(1, 100, '2026-10-09T09:00:00Z'),
+			makeTask(2, 200, '2026-10-10T09:00:00Z'),
+			makeTask(3, 300, '2026-10-11T09:00:00Z'),
+		], page: 1, total_pages: 1}})
+		const wrapper = await mountList({sort: 'due_date_week:asc'}, {SingleTaskInProject: SingleTaskStub}, queryClient)
+
+		// Task 1 is deferred from yesterday to later today
+		sdk.projectViewTasksList.mockResolvedValue({data: {items: [
+			makeTask(2, 200, '2026-10-10T09:00:00Z'),
+			makeTask(1, 100, '2026-10-10T15:00:00Z'),
+			makeTask(3, 300, '2026-10-11T09:00:00Z'),
+		], page: 1, total_pages: 1}})
+		await queryClient.invalidateQueries()
+		await flushPromises()
+		expect(wrapper.findAll('.due-day-group').map(group => group.findAll('[data-task-id]').map(task => task.attributes('data-task-id'))))
+			.toEqual([['2', '1'], ['3']])
+
+		for (let i = 0; i < 3; i++) {
+			document.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyJ'}))
+		}
+
+		expect(focused).toEqual([2, 1, 3])
 	})
 
 	it('keeps the flat list for other sorts', async () => {
